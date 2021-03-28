@@ -1,49 +1,50 @@
+print("Starting...")
 import pandas as pd
 import numpy as np
 from tkinter import *
 from tkinter import filedialog
-
+import sqlite3
+conn = sqlite3.connect(':memory:')
 filepath1=""
 filepath1=""
 window = Tk()
 def openFile1():
     global filepath1
-    filepath1 = filedialog.askopenfilename(initialdir="./",title="Open file?")
-    print(f"Loaded file 1 from {filepath1}")
+    filepath1 = filedialog.askopenfilename(filetypes=[("Excel files", ".xlsx .xls")])
+    print(f"Chosen XLSX file from {filepath1}")
 
 def openFile2():
     global filepath2
-    filepath2 = filedialog.askopenfilename(initialdir="./", title="Open file?")
-    print(f"Loaded file 2 from {filepath2}")
+    filepath2 = filedialog.askopenfilename(filetypes=[("CSV files", ".csv")])
+    print(f"Chosen CSV file from {filepath2}")
 
 def compare():
+    print("Loading data...")
+    df1=pd.read_excel(filepath1)
+    df2=pd.read_csv(filepath2)
+    df1.to_sql(name='XLSX_DATA', con=conn)
+    df2.to_sql(name='CSV_DATA', con=conn)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM CSV_DATA WHERE DEVICE LIKE 'C%' OR DEVICE LIKE 'R%'")
+    csv_data=cur.fetchall()
     print("Comparing...")
-    try:
-        df1=pd.read_excel(filepath1)
-        df2=pd.read_excel(filepath2)
+    for row in csv_data:
+        q=f"SELECT * FROM XLSX_DATA WHERE DEVICE = '{row[3].strip()}'"
+        cur.execute(q)
+        result=cur.fetchone()
+        if result:
+            print("Found "+result[1])
+        else:
+            print("Not found "+row[3])
+    
 
-        df1.equals(df2)
-        comparison_values = df1.values == df2.values
-        rows,cols=np.where(comparison_values==False)
-        for item in zip(rows,cols):
-            df1.iloc[item[0], item[1]] = '{} --> {}'.format(df1.iloc[item[0], item[1]],df2.iloc[item[0], item[1]])
-
-        def color_diff_red(val):
-            bgcolor = 'red' if ">" in str(val) else 'none'
-            return f'background-color: {bgcolor}'
-        final=df1.style.applymap(color_diff_red)
-
-        savefile = filedialog.asksaveasfilename(filetypes=(("Excel files", "*.xlsx"),("All files", "*.*") ))               
-        
-        final.to_excel(savefile + ".xlsx", index=False, sheet_name="Results")         
-        print("Done!")
-    except:
-        print("An exception occurred")
+    print("Done!")
+    
 
 
-button1 = Button(window,text="Select File 1",command=openFile1)
+button1 = Button(window,text="Select XLSX File",command=openFile1)
 button1.pack()
-button2 = Button(window,text="Select File 2",command=openFile2)
+button2 = Button(window,text="Select CSV File",command=openFile2)
 button2.pack()
 button3 = Button(window,text="Compare",command=compare)
 button3.pack()
