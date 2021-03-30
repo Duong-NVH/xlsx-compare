@@ -11,6 +11,7 @@ window = Tk()
 
 ERR_INVALID="invalid format"
 ERR_SOME_SHIT_WAS_WRONG="Some thing went wrong.\nPlease try again!"
+NOT_FOUND= "NOT FOUND"
 
 def openFile1():
     global filepath1
@@ -23,36 +24,40 @@ def openFile2():
     print(f"Chosen CSV file from {filepath2}")
 
 def compare():
-    try:
-        print("Loading data...")
-        df1=pd.read_excel(filepath1)
-        df2=pd.read_csv(filepath2)
-        df1.to_sql(name='XLSX_DATA', con=conn)
-        df2.to_sql(name='CSV_DATA', con=conn)
-        cur = conn.cursor()
+    print("Loading data...")
+    df1=pd.read_excel(filepath1)
+    df2=pd.read_csv(filepath2)
+    df1.to_sql(name='XLSX_DATA', con=conn)
+    df2.to_sql(name='CSV_DATA', con=conn)
+    cur = conn.cursor()
         
-        print("Comparing...")
-        # compare R
-        cur.execute("SELECT * FROM CSV_DATA WHERE DEVICE LIKE 'R%'")
-        r_csv_data=cur.fetchall()
-        for row in r_csv_data:
-            q=f"SELECT * FROM XLSX_DATA WHERE DEVICE = '{row[3].strip()}'"
-            cur.execute(q)
-            result=cur.fetchone()
-            if result:
-                xlsx=readRFromXLSX(result[2])
-                if xlsx== ERR_INVALID:
-                    xlsx=readRFromXLSXType2(result[2])
-                csv=readRFromCSV(row[4])
-                x1=calculateR(xlsx)
-                c1=calculateR(csv)
-                if x1 != c1:
-                    print(f"DIFF: {result[1]}: {xlsx} - {x1} - {result[2]} / {csv} - {c1} - {row[4]}")
-            else:
-                print("Not found "+row[3]+" in XLSX file")
-        print("Done!")
-    except:
-        print(ERR_SOME_SHIT_WAS_WRONG)
+    print("Comparing...")
+    df_result = pd.DataFrame(columns=['Device', 'XLSX index', 'CSV index','XLSX Raw', 'CSV Raw', 'XLSX Data', 'CSV Data'])
+    # compare R
+    cur.execute("SELECT * FROM CSV_DATA WHERE DEVICE LIKE 'R%'")
+    r_csv_data=cur.fetchall()
+    for row in r_csv_data:
+        q=f"SELECT * FROM XLSX_DATA WHERE DEVICE = '{row[3].strip()}'"
+        cur.execute(q)
+        result=cur.fetchone()
+        if result:
+            xlsx=readRFromXLSX(result[2])
+            if xlsx== ERR_INVALID:
+                xlsx=readRFromXLSXType2(result[2])
+            csv=readRFromCSV(row[4])
+            x1=calculateR(xlsx)
+            c1=calculateR(csv)
+            if x1 != c1:
+                print(f"DIFF: {result[1]}: {xlsx} - {result[2]} / {csv} - {row[4]}")
+                df_result=df_result.append({'Device': result[1], 'XLSX index': result[0]+2, 'CSV index':row[0]+2, 'XLSX Raw':result[2], 'CSV Raw':row[4], 'XLSX Data':xlsx, 'CSV Data':csv},ignore_index=True)
+
+        else:
+            print("Not found "+row[3]+" in XLSX file")
+            df_result=df_result.append({'Device': row[3], 'XLSX index': NOT_FOUND, 'CSV index':row[0]+1, 'XLSX Raw':NOT_FOUND, 'CSV Raw':row[4], 'XLSX Data':NOT_FOUND, 'CSV Data':readRFromCSV(row[4])},ignore_index=True)
+    save_path= filedialog.asksaveasfilename(filetypes=(("Excel files", "*.xlsx"),("All files", "*.*")))  
+    df_result.to_excel(save_path+".xlsx",sheet_name='result') 
+    print(f"Saved the differences in: {save_path}.xlsx")
+    print("Done!")
 
 def calculateR(data):
     if data.isdecimal() or data.replace(".","").isdecimal() :
